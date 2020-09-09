@@ -135,17 +135,20 @@ int tls_init( void )
 
 	if (RAND_status() != 1) {
 
-		if ( (egdbytes = RAND_egd(ssl_egdsocket)) == -1 ) {
-
-			net_server_SSL = 0;
-			net_client_SSL = 0;
-
-			printf("ssl_init: RAND_egd failed\r\n");
-
-			tls_free();
-
-			return -2;
-		}
+// this throws issues on modern SSL on my systems, so i've
+// simply commented it out.
+//
+//		if ( (egdbytes = RAND_egd(ssl_egdsocket)) == -1 ) {
+//
+//			net_server_SSL = 0;
+//			net_client_SSL = 0;
+//
+//			printf("ssl_init: RAND_egd failed\r\n");
+//
+//			tls_free();
+//
+//			return -2;
+//		}
 
 		if (RAND_status() != 1) {
 
