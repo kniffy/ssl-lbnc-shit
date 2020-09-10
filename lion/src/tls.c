@@ -34,7 +34,7 @@
  *
  */
 
-// $Id: tls.c,v 1.6 2008/10/28 00:12:30 lundman Exp $
+// $Id: tls.c,v 1.7 2010/10/26 06:38:41 lundman Exp $
 // SSL/TLS Support Functions
 // Jorgen Lundman October 17th, 2002.
 
@@ -67,14 +67,15 @@
 
 
 //#define DEBUG
+//#define DEBUG_VERBOSE
 
-__RCSID("$LiON: lundman/lion/src/tls.c,v 1.6 2008/10/28 00:12:30 lundman Exp $");
+__RCSID("$LiON: lundman/lion/src/tls.c,v 1.7 2010/10/26 06:38:41 lundman Exp $");
 
 
 
 
 static char cfg_tlsciphers[] =
-"RC4-SHA:RC4-MD5:DHE-DSS-RC4-SHA:DES-CBC3-SHA:DES-CBC3-MD5:EDH-RSA-DES-CBC3-SHA:EDH-DSS-DES-CBC3-SHA";
+"ALL";
 
 
 // Master TLS context
@@ -100,7 +101,7 @@ int tls_init( void )
 		return 0;
 
 	if (!ssl_tlsciphers)
-		ssl_tlsciphers = strdup( cfg_tlsciphers );
+	  ssl_tlsciphers = strdup( cfg_tlsciphers );
 	if (!ssl_egdsocket)
 		ssl_egdsocket = strdup( "/var/run/egd-pool" );
 	if (!ssl_tlsrsafile)
@@ -135,20 +136,17 @@ int tls_init( void )
 
 	if (RAND_status() != 1) {
 
-// this throws issues on modern SSL on my systems, so i've
-// simply commented it out.
-//
-//		if ( (egdbytes = RAND_egd(ssl_egdsocket)) == -1 ) {
-//
-//			net_server_SSL = 0;
-//			net_client_SSL = 0;
-//
-//			printf("ssl_init: RAND_egd failed\r\n");
-//
-//			tls_free();
-//
-//			return -2;
-//		}
+		if ( (egdbytes = RAND_egd(ssl_egdsocket)) == -1 ) {
+
+			net_server_SSL = 0;
+			net_client_SSL = 0;
+
+			printf("ssl_init: RAND_egd failed\r\n");
+
+			tls_free();
+
+			return -2;
+		}
 
 		if (RAND_status() != 1) {
 
@@ -165,12 +163,10 @@ int tls_init( void )
 
 
 	// Set some options
-	SSL_CTX_set_options(tls_ctx, SSL_OP_NO_SSLv2);
+	SSL_CTX_set_options(tls_ctx, SSL_OP_NO_SSLv2|SSL_OP_NO_SSLv3);
 	//SSL_CTX_set_options(tls_ctx, SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1);
 	//SSL_CTX_set_options(tls_ctx, SSL_OP_NO_TLSv1);
 	SSL_CTX_set_default_verify_paths(tls_ctx);
-
-
 
 	SSL_CTX_set_session_cache_mode(tls_ctx, SSL_SESS_CACHE_CLIENT);
 	SSL_CTX_set_session_id_context(tls_ctx, (const unsigned char *) "1", 1);
@@ -212,8 +208,14 @@ int tls_init( void )
 
 	}
 
+#ifdef SSL_CTX_set_ecdh_auto
+	SSL_CTX_set_ecdh_auto(tls_ctx, 1);
+#endif
 
-
+	if (ssl_tlsciphers) {
+	  printf("Setting cipher list\n");
+	  SSL_CTX_set_cipher_list(tls_ctx, ssl_tlsciphers);
+	}
 	return 0;
 
 }
@@ -243,7 +245,7 @@ void tls_close( connection_t *node )
 {
 
 	if (node->trace)
-		fprintf(trace_file, "%p: tls_close\n", node);
+		fprintf(trace_file, "%p: tls_close (%p)\n", node, node->ctx);
 
 	if (node->ctx) {
 #ifdef DEBUG
@@ -264,7 +266,7 @@ int tls_auth( connection_t *node )
 {
 
 #ifdef DEBUG
-	printf("tls_auth(%p): %p\n", node, node->ctx);
+  printf("tls_auth(%p): %p ciphers %p\n", node, node->ctx, ssl_tlsciphers);
 #endif
 
 	if (node->trace)
@@ -290,8 +292,10 @@ int tls_auth( connection_t *node )
 	}
 
 
-	SSL_set_cipher_list(node->ctx, ssl_tlsciphers);
-
+	if (ssl_tlsciphers) {
+	  printf("auth cipher %s\n", ssl_tlsciphers);
+	  SSL_set_cipher_list(node->ctx, ssl_tlsciphers);
+	}
 #ifdef DEBUG
 	printf("Setting fd %d\n", node->socket);
 #endif
@@ -403,9 +407,10 @@ void tls_cont_auth( connection_t *node )
 			node->want_mode = NET_NEG_WANT_WRITE;
 			break;
 		default:
-#ifdef DEBUG
-   			printf("tls_auth_cont: failed (%d, %d, %d)\n",
-				   sslerr, status, errno);
+#if 1
+   			printf("tls_auth_cont: failed (%d, %d, %d): %s\n",
+			       sslerr, status, errno,
+			       (char *)ERR_error_string(ERR_get_error(), NULL));
 #endif
 
 			if (node->trace)
@@ -443,14 +448,16 @@ int tls_read(connection_t *node, void *buf, int num)
 	SSL *ssl;
 	int status, sslerr;
 
-
 	ssl = node->ctx;
 
 	status = SSL_read(ssl, (char *)buf, num);
 	sslerr = SSL_get_error(ssl, status);
 
 #ifdef DEBUG_VERBOSE
-	printf("tls_read: %d\n", status);
+	printf("tls_read: %p: (SSL_read %d, sslerr %d, errno %d): ctx %p\n",
+           node,status,
+           sslerr, errno,
+           node->ctx);
 #endif
 #ifdef DEBUG
 	if (node->trace)
@@ -656,8 +663,10 @@ int tls_clauth( connection_t *node )
 		return -2;
 	}
 
-
-	SSL_set_cipher_list(node->ctx, ssl_tlsciphers);
+	if (ssl_tlsciphers) {
+	  //printf("clauth cipher: %s\n", ssl_tlsciphers);
+	  SSL_set_cipher_list(node->ctx, ssl_tlsciphers);
+	}
 
 #ifdef DEBUG
 	printf("Setting fd %d\n", node->socket);
