@@ -1,0 +1,8 @@
+tls stuff needs fixed up
+- merge in the mrb ecdsa patch?
+
+even with that patch though i seem to have
+issues getting lftp to properly connect with
+force-ssl et al turned on.
+
+someone smarter than me should do this :^)

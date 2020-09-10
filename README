@@ -1,0 +1,15 @@
+hello, the basic instructions are to do the following:
+
+./configure
+
+then,
+
+make
+
+if it compiled properly you'll see the executable at
+src/ssl-lbnc
+
+from there you can probably figure it out yourself,
+after all you are already running your favorite ftp
+daemon :)
+
