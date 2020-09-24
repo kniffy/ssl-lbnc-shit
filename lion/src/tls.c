@@ -296,7 +296,8 @@ int tls_auth( connection_t *node )
 
 
 	if (ssl_tlsciphers) {
-	  printf("auth cipher %s\n", ssl_tlsciphers);
+// why is this printf here? just spams my terminal
+//	  printf("auth cipher %s\n", ssl_tlsciphers);
 	  SSL_set_cipher_list(node->ctx, ssl_tlsciphers);
 	}
 #ifdef DEBUG
