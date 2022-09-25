@@ -114,7 +114,7 @@ int tls_init( void )
 	SSL_load_error_strings();                /* readable error messages */
 	SSL_library_init();                      /* initialize library */
 
-	tls_ctx = SSL_CTX_new(SSLv23_method());
+	tls_ctx = SSL_CTX_new(TLS_method());
 
 
 	// Did we get SSL?
@@ -254,8 +254,7 @@ void tls_close( connection_t *node )
 #ifdef DEBUG
 		printf("Releasing SSL socket\n");
 #endif
-        SSL_shutdown(node->ctx);
-		SSL_free( node->ctx );
+        SSL_shutdown(node->ctx);	
 		node->ctx = NULL;
 	}
 
